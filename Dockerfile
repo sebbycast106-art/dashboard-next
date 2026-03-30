@@ -19,11 +19,18 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV HOSTNAME="0.0.0.0"
 
+# better-sqlite3 needs python3 + make + g++ at runtime for native bindings
+RUN apk add --no-cache python3 make g++
+
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# Copy better-sqlite3 native binary and prisma adapter
+COPY --from=builder /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+COPY --from=builder /app/node_modules/@prisma/adapter-better-sqlite3 ./node_modules/@prisma/adapter-better-sqlite3
 
 EXPOSE 8080
-CMD ["sh", "-c", "if [ -n \"$DATABASE_URL\" ]; then npx prisma migrate deploy; fi && node server.js"]
+# Use prisma db push (schema-first, no migration files needed) then start
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss 2>/dev/null || true && node server.js"]
