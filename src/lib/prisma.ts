@@ -1,11 +1,11 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient | null };
 
 function createPrismaClient(): PrismaClient | null {
-  if (!process.env.DATABASE_URL) return null;
-  const adapter = new PrismaPg(process.env.DATABASE_URL);
+  const dbUrl = process.env.DATABASE_URL ?? "file:./dashboard.db";
+  const adapter = new PrismaBetterSqlite3({ url: dbUrl });
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["error"] : [],

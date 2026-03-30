@@ -22,7 +22,7 @@ export async function GET() {
   });
 
   if (cached) {
-    const data = cached.data as Record<string, unknown>;
+    const data = JSON.parse(cached.data) as Record<string, unknown>;
     return Response.json({
       ...data,
       fetched_at: now,

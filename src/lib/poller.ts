@@ -132,7 +132,7 @@ async function pollAllBots(): Promise<void> {
         botType: bot.type,
         status: pollResult.status,
         health,
-        details: (pollResult.details as object) ?? undefined,
+        details: pollResult.details != null ? JSON.stringify(pollResult.details) : undefined,
         lastLine: pollResult.lastLine ?? null,
         lastModified: pollResult.lastModified ?? null,
         lastPolled: now,
@@ -144,7 +144,7 @@ async function pollAllBots(): Promise<void> {
         botType: bot.type,
         status: pollResult.status,
         health,
-        details: (pollResult.details as object) ?? undefined,
+        details: pollResult.details != null ? JSON.stringify(pollResult.details) : undefined,
         lastLine: pollResult.lastLine ?? null,
         lastModified: pollResult.lastModified ?? null,
         lastPolled: now,
@@ -222,5 +222,8 @@ export async function getStatus(): Promise<BotStatusRow[]> {
 
   await ensureFreshStatus();
   const rows = await prisma!.botStatusCache.findMany();
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    details: row.details != null ? JSON.parse(row.details) : null,
+  }));
 }

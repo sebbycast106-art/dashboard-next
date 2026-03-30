@@ -26,8 +26,7 @@ export async function POST(request: Request) {
   const bot = typeof body.bot === "string" ? body.bot : "coop";
   const rawData = (typeof body.data === "object" && body.data !== null ? body.data : {}) as Record<string, unknown>;
   rawData.pushed_at = new Date().toISOString();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data = rawData as any;
+  const data = JSON.stringify(rawData);
 
   await prisma!.automationCache.upsert({
     where: { botKey: bot },

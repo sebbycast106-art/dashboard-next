@@ -3,13 +3,13 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 model GamesCompletion {
   id            Int      @id @default(autoincrement())
   gameId        String   @map("game_id")
-  completedDate DateTime @map("completed_date") @db.Date
+  completedDate DateTime @map("completed_date")
   streak        Int      @default(1)
   lastPlayed    String   @map("last_played")
   createdAt     DateTime @default(now()) @map("created_at")
@@ -24,7 +24,7 @@ model BotStatusCache {
   botType      String   @map("bot_type")
   status       String
   health       String
-  details      Json?
+  details      String?
   lastLine     String?  @map("last_line")
   lastModified DateTime? @map("last_modified")
   lastPolled   DateTime @default(now()) @map("last_polled")
@@ -35,7 +35,7 @@ model BotStatusCache {
 
 model AutomationCache {
   botKey   String   @id @map("bot_key")
-  data     Json
+  data     String
   pushedAt DateTime @default(now()) @map("pushed_at")
 
   @@map("automation_cache")
