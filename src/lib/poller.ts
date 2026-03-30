@@ -1,0 +1,164 @@
+import { prisma } from "./prisma";
+import { BOTS, type BotConfig } from "./config";
+
+const STALE_SECONDS = 60;
+
+const STATUS_TO_HEALTH: Record<string, string> = {
+  online: "healthy",
+  offline: "down",
+  timeout: "down",
+  error: "down",
+  unhealthy: "degraded",
+  no_log: "down",
+  pending: "unknown",
+  local: "local",
+  unknown: "unknown",
+};
+
+interface BotPollResult {
+  status: string;
+  health?: unknown;
+  details?: unknown;
+  lastLine?: string;
+  lastModified?: Date;
+  errorMsg?: string;
+}
+
+async function fetchWithTimeout(url: string, options?: RequestInit, timeoutMs = 10000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function pollRemoteBot(bot: BotConfig): Promise<BotPollResult> {
+  const result: BotPollResult = { status: "unknown" };
+
+  // Health check
+  try {
+    const healthUrl = bot.url! + bot.healthPath!;
+    const resp = await fetchWithTimeout(healthUrl, {}, 5000);
+    if (resp.ok) {
+      result.status = "online";
+      const ct = resp.headers.get("content-type") ?? "";
+      result.health = ct.includes("application/json") ? await resp.json() : { ok: true };
+    } else {
+      result.status = "unhealthy";
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("abort") || msg.includes("timeout")) {
+      result.status = "timeout";
+    } else {
+      result.status = "offline";
+    }
+    return result;
+  }
+
+  // Status endpoint (if available)
+  if (bot.statusPath) {
+    try {
+      const secret = bot.secret;
+      const statusUrl = `${bot.url}${bot.statusPath}${secret ? `?secret=${secret}` : ""}`;
+      const resp = await fetchWithTimeout(statusUrl, {}, 10000);
+      if (resp.ok) {
+        result.details = await resp.json();
+      }
+    } catch {
+      // Ignore status endpoint errors — health is already recorded
+    }
+  }
+
+  return result;
+}
+
+function localBotResult(): BotPollResult {
+  // Local bots cannot be polled from Railway (Linux). Return a neutral status.
+  return { status: "local" };
+}
+
+async function pollAllBots(): Promise<void> {
+  const now = new Date();
+
+  for (const bot of BOTS) {
+    let pollResult: BotPollResult;
+
+    try {
+      if (bot.type === "remote") {
+        pollResult = await pollRemoteBot(bot);
+      } else {
+        // Local bots: on Railway (non-Windows) we can't read the filesystem
+        if (process.platform !== "win32") {
+          pollResult = localBotResult();
+        } else {
+          // On Windows (local dev), we could attempt to read the log file,
+          // but for simplicity we return the same local status.
+          pollResult = localBotResult();
+        }
+      }
+    } catch (err: unknown) {
+      pollResult = {
+        status: "error",
+        errorMsg: err instanceof Error ? err.message : String(err),
+      };
+    }
+
+    const health =
+      bot.type === "local"
+        ? "local"
+        : (STATUS_TO_HEALTH[pollResult.status] ?? "unknown");
+
+    await prisma.botStatusCache.upsert({
+      where: { botId: bot.id },
+      update: {
+        botName: bot.name,
+        botType: bot.type,
+        status: pollResult.status,
+        health,
+        details: (pollResult.details as object) ?? undefined,
+        lastLine: pollResult.lastLine ?? null,
+        lastModified: pollResult.lastModified ?? null,
+        lastPolled: now,
+        errorMsg: pollResult.errorMsg ?? null,
+      },
+      create: {
+        botId: bot.id,
+        botName: bot.name,
+        botType: bot.type,
+        status: pollResult.status,
+        health,
+        details: (pollResult.details as object) ?? undefined,
+        lastLine: pollResult.lastLine ?? null,
+        lastModified: pollResult.lastModified ?? null,
+        lastPolled: now,
+        errorMsg: pollResult.errorMsg ?? null,
+      },
+    });
+  }
+}
+
+export async function ensureFreshStatus(): Promise<void> {
+  const staleThreshold = new Date(Date.now() - STALE_SECONDS * 1000);
+
+  // Check if we have any rows at all, or if any row is stale
+  const staleCount = await prisma.botStatusCache.count({
+    where: {
+      lastPolled: { lt: staleThreshold },
+    },
+  });
+
+  const totalCount = await prisma.botStatusCache.count();
+
+  if (staleCount > 0 || totalCount === 0) {
+    await pollAllBots();
+  }
+}
+
+export async function getStatus() {
+  await ensureFreshStatus();
+  const rows = await prisma.botStatusCache.findMany();
+  return rows;
+}

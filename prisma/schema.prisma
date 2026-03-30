@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model GamesCompletion {
+  id            Int      @id @default(autoincrement())
+  gameId        String   @map("game_id")
+  completedDate DateTime @map("completed_date") @db.Date
+  streak        Int      @default(1)
+  lastPlayed    String   @map("last_played")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([gameId, completedDate])
+  @@map("games_completions")
+}
+
+model BotStatusCache {
+  botId        String   @id @map("bot_id")
+  botName      String   @map("bot_name")
+  botType      String   @map("bot_type")
+  status       String
+  health       String
+  details      Json?
+  lastLine     String?  @map("last_line")
+  lastModified DateTime? @map("last_modified")
+  lastPolled   DateTime @default(now()) @map("last_polled")
+  errorMsg     String?  @map("error_msg")
+
+  @@map("bot_status_cache")
+}
+
+model AutomationCache {
+  botKey   String   @id @map("bot_key")
+  data     Json
+  pushedAt DateTime @default(now()) @map("pushed_at")
+
+  @@map("automation_cache")
+}
