@@ -33,4 +33,4 @@ COPY --from=builder /app/node_modules/@prisma/adapter-better-sqlite3 ./node_modu
 
 EXPOSE 8080
 # Use prisma db push (schema-first, no migration files needed) then start
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss 2>/dev/null || true && node server.js"]
+CMD ["node", "server.js"]
