@@ -1,6 +1,10 @@
-import { prisma } from "@/lib/prisma";
+import { prisma, dbAvailable } from "@/lib/prisma";
 
 export async function POST(request: Request) {
+  if (!dbAvailable) {
+    return Response.json({ ok: false, error: "no_database" }, { status: 503 });
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await request.json();
@@ -25,7 +29,7 @@ export async function POST(request: Request) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = rawData as any;
 
-  await prisma.automationCache.upsert({
+  await prisma!.automationCache.upsert({
     where: { botKey: bot },
     update: { data, pushedAt: new Date() },
     create: { botKey: bot, data, pushedAt: new Date() },

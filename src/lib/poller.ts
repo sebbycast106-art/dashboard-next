@@ -1,4 +1,4 @@
-import { prisma } from "./prisma";
+import { prisma, dbAvailable } from "./prisma";
 import { BOTS, type BotConfig } from "./config";
 
 const STALE_SECONDS = 60;
@@ -22,6 +22,20 @@ interface BotPollResult {
   lastLine?: string;
   lastModified?: Date;
   errorMsg?: string;
+}
+
+// Shape that matches what the status route expects, whether from DB or direct poll
+export interface BotStatusRow {
+  botId: string;
+  botName: string;
+  botType: string;
+  status: string;
+  health: string;
+  details: unknown;
+  lastLine: string | null;
+  lastModified: Date | null;
+  lastPolled: Date;
+  errorMsg: string | null;
 }
 
 async function fetchWithTimeout(url: string, options?: RequestInit, timeoutMs = 10000): Promise<Response> {
@@ -111,7 +125,7 @@ async function pollAllBots(): Promise<void> {
         ? "local"
         : (STATUS_TO_HEALTH[pollResult.status] ?? "unknown");
 
-    await prisma.botStatusCache.upsert({
+    await prisma!.botStatusCache.upsert({
       where: { botId: bot.id },
       update: {
         botName: bot.name,
@@ -140,25 +154,73 @@ async function pollAllBots(): Promise<void> {
   }
 }
 
-export async function ensureFreshStatus(): Promise<void> {
+async function ensureFreshStatus(): Promise<void> {
   const staleThreshold = new Date(Date.now() - STALE_SECONDS * 1000);
 
   // Check if we have any rows at all, or if any row is stale
-  const staleCount = await prisma.botStatusCache.count({
+  const staleCount = await prisma!.botStatusCache.count({
     where: {
       lastPolled: { lt: staleThreshold },
     },
   });
 
-  const totalCount = await prisma.botStatusCache.count();
+  const totalCount = await prisma!.botStatusCache.count();
 
   if (staleCount > 0 || totalCount === 0) {
     await pollAllBots();
   }
 }
 
-export async function getStatus() {
+// Poll bots directly without DB caching (used when DB is unavailable)
+async function pollAllBotsDirectly(): Promise<BotStatusRow[]> {
+  const now = new Date();
+  const results: BotStatusRow[] = [];
+
+  for (const bot of BOTS) {
+    let pollResult: BotPollResult;
+
+    try {
+      if (bot.type === "remote") {
+        pollResult = await pollRemoteBot(bot);
+      } else {
+        pollResult = localBotResult();
+      }
+    } catch (err: unknown) {
+      pollResult = {
+        status: "error",
+        errorMsg: err instanceof Error ? err.message : String(err),
+      };
+    }
+
+    const health =
+      bot.type === "local"
+        ? "local"
+        : (STATUS_TO_HEALTH[pollResult.status] ?? "unknown");
+
+    results.push({
+      botId: bot.id,
+      botName: bot.name,
+      botType: bot.type,
+      status: pollResult.status,
+      health,
+      details: pollResult.details ?? null,
+      lastLine: pollResult.lastLine ?? null,
+      lastModified: pollResult.lastModified ?? null,
+      lastPolled: now,
+      errorMsg: pollResult.errorMsg ?? null,
+    });
+  }
+
+  return results;
+}
+
+export async function getStatus(): Promise<BotStatusRow[]> {
+  if (!dbAvailable) {
+    // No DB — poll bots directly on each request
+    return pollAllBotsDirectly();
+  }
+
   await ensureFreshStatus();
-  const rows = await prisma.botStatusCache.findMany();
+  const rows = await prisma!.botStatusCache.findMany();
   return rows;
 }

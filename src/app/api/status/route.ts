@@ -1,7 +1,5 @@
 import { requireAuth } from "@/lib/auth";
-import { getStatus } from "@/lib/poller";
-
-type StatusRow = Awaited<ReturnType<typeof getStatus>>[number];
+import { getStatus, type BotStatusRow } from "@/lib/poller";
 
 export async function GET() {
   const authError = await requireAuth();
@@ -9,7 +7,7 @@ export async function GET() {
 
   const rows = await getStatus();
 
-  const bots = rows.map((row: StatusRow) => ({
+  const bots = rows.map((row: BotStatusRow) => ({
     id: row.botId,
     name: row.botName,
     type: row.botType,

@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, dbAvailable } from "@/lib/prisma";
 
 function todayUTC(): string {
   return new Date().toISOString().slice(0, 10);
@@ -26,6 +26,10 @@ export async function POST(request: Request) {
   const authError = await requireAuth();
   if (authError) return authError;
 
+  if (!dbAvailable) {
+    return Response.json({ error: "Database not configured" }, { status: 503 });
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await request.json();
@@ -51,7 +55,7 @@ export async function POST(request: Request) {
   const yesterdayDate = new Date(yesterday + "T00:00:00.000Z");
 
   // Check if already completed today — idempotent
-  const existing = await prisma.gamesCompletion.findUnique({
+  const existing = await prisma!.gamesCompletion.findUnique({
     where: { gameId_completedDate: { gameId, completedDate: todayDate } },
   });
 
@@ -69,14 +73,14 @@ export async function POST(request: Request) {
   }
 
   // Look up yesterday's streak
-  const prev = await prisma.gamesCompletion.findUnique({
+  const prev = await prisma!.gamesCompletion.findUnique({
     where: { gameId_completedDate: { gameId, completedDate: yesterdayDate } },
   });
 
   const newStreak = prev ? prev.streak + 1 : 1;
   const lastPlayed = nowStr();
 
-  const record = await prisma.gamesCompletion.upsert({
+  const record = await prisma!.gamesCompletion.upsert({
     where: { gameId_completedDate: { gameId, completedDate: todayDate } },
     update: { streak: newStreak, lastPlayed },
     create: {

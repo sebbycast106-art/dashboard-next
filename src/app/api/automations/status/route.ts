@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, dbAvailable } from "@/lib/prisma";
 
 export async function GET() {
   const authError = await requireAuth();
@@ -7,8 +7,17 @@ export async function GET() {
 
   const now = new Date().toISOString();
 
+  if (!dbAvailable) {
+    return Response.json({
+      scraper: null,
+      jobs: null,
+      unavailable: true,
+      fetched_at: now,
+    });
+  }
+
   // Try pushed cache from DB (coop bot)
-  const cached = await prisma.automationCache.findUnique({
+  const cached = await prisma!.automationCache.findUnique({
     where: { botKey: "coop" },
   });
 
