@@ -1,0 +1,17 @@
+# <type>: <short summary> (50 chars max)
+#
+# Types: feat | fix | refactor | chore | docs | style | test
+#
+# WHY this change was needed (not what — the diff shows that):
+#
+#
+# ─────────────────────────────────
+# Examples of GOOD commit messages:
+#   fix: bootstrap SQLite tables inline — prisma db push not available in standalone
+#   feat: add SafetyMeter component — shows quota usage before LinkedIn bans you
+#   refactor: move auth to JWT cookies — Flask sessions don't work in Next.js
+#
+# Examples of BAD commit messages:
+#   "update"
+#   "fix stuff"
+#   "feat: initial Next.js 16 migration — full TypeScript rewrite"  ← too big, no WHY

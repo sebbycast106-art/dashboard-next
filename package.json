@@ -3,9 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "next lint",
+    "db:studio": "prisma studio",
+    "db:push": "prisma db push"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.6.0",
