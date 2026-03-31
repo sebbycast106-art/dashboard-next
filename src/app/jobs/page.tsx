@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { usePolling } from "@/hooks/usePolling";
 import Layout from "@/components/Layout";
+import { post, patch } from "@/lib/api";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -26,6 +27,8 @@ type StatusFilter =
   | "interview"
   | "offer"
   | "rejected";
+
+type MinScore = 0 | 6 | 7 | 8 | 9;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -51,6 +54,26 @@ function formatUpdatedAt(isoString?: string): string {
     return isoString;
   }
 }
+
+// ── Status colour map ──────────────────────────────────────────────────────
+
+const STATUS_COLORS: Record<string, string> = {
+  seen:      "bg-[#334155] text-[#94a3b8] border border-[#475569]/30",
+  applied:   "bg-[#1d4ed8]/20 text-[#60a5fa] border border-[#1d4ed8]/30",
+  responded: "bg-[#d97706]/20 text-[#fbbf24] border border-[#d97706]/30",
+  interview: "bg-[#16a34a]/20 text-[#4ade80] border border-[#16a34a]/30",
+  offer:     "bg-[#059669]/20 text-[#34d399] border border-[#059669]/30",
+  rejected:  "bg-[#dc2626]/20 text-[#f87171] border border-[#dc2626]/30",
+};
+
+const STATUS_OPTIONS = [
+  "seen",
+  "applied",
+  "responded",
+  "interview",
+  "offer",
+  "rejected",
+] as const;
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
@@ -86,23 +109,6 @@ function SourceBadge({ source }: { source?: string }) {
   );
 }
 
-function StatusBadge({ status }: { status: Job["status"] }) {
-  const map: Record<Job["status"], { label: string; className: string }> = {
-    seen:       { label: "Seen",       className: "bg-[#334155] text-[#94a3b8] border-[#475569]/30" },
-    applied:    { label: "Applied",    className: "bg-[#1d4ed8]/20 text-[#60a5fa] border-[#1d4ed8]/30" },
-    responded:  { label: "Responded",  className: "bg-[#d97706]/20 text-[#fbbf24] border-[#d97706]/30" },
-    interview:  { label: "Interview",  className: "bg-[#16a34a]/20 text-[#4ade80] border-[#16a34a]/30" },
-    offer:      { label: "Offer",      className: "bg-[#059669]/20 text-[#34d399] border-[#059669]/30" },
-    rejected:   { label: "Rejected",   className: "bg-[#dc2626]/20 text-[#f87171] border-[#dc2626]/30" },
-  };
-  const { label, className } = map[status] ?? map.seen;
-  return (
-    <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded border ${className}`}>
-      {label}
-    </span>
-  );
-}
-
 function ScoreBadge({ score }: { score: number }) {
   const color =
     score >= 8 ? "bg-[#16a34a]/20 text-[#4ade80] border-[#16a34a]/30" :
@@ -115,6 +121,56 @@ function ScoreBadge({ score }: { score: number }) {
   );
 }
 
+// ── StatusButton (kanban-style dropdown) ───────────────────────────────────
+
+function StatusButton({
+  job,
+  onStatusChange,
+}: {
+  job: Job;
+  onStatusChange: (id: string, status: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const update = async (newStatus: string) => {
+    setLoading(true);
+    setOpen(false);
+    try {
+      await patch(`/jobs/${job.job_id}/status`, { status: newStatus });
+      onStatusChange(job.job_id, newStatus);
+    } catch {
+      // silently fail — status stays as-is
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${STATUS_COLORS[job.status] ?? STATUS_COLORS.seen}`}
+      >
+        {loading ? "…" : job.status}
+      </button>
+      {open && (
+        <div className="absolute z-10 top-full left-0 mt-1 bg-gray-800 border border-gray-600 rounded shadow-lg min-w-[100px]">
+          {STATUS_OPTIONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => update(s)}
+              className="block w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-gray-700 text-gray-200"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────
 
 export default function JobsPage() {
@@ -122,9 +178,27 @@ export default function JobsPage() {
 
   const [activeFilter, setActiveFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
+  const [minScore, setMinScore] = useState<MinScore>(0);
+  // Local overrides for optimistic status updates
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>({});
 
-  const jobs: Job[] = useMemo(() => data?.applications ?? data?.jobs ?? [], [data]);
+  const rawJobs: Job[] = useMemo(() => data?.applications ?? data?.jobs ?? [], [data]);
   const updatedAt: string | undefined = data?.updated_at ?? data?.fetched_at;
+
+  // Apply optimistic status overrides
+  const jobs: Job[] = useMemo(
+    () =>
+      rawJobs.map((j) =>
+        statusOverrides[j.job_id]
+          ? { ...j, status: statusOverrides[j.job_id] as Job["status"] }
+          : j
+      ),
+    [rawJobs, statusOverrides]
+  );
+
+  const handleStatusChange = (id: string, newStatus: string) => {
+    setStatusOverrides((prev) => ({ ...prev, [id]: newStatus }));
+  };
 
   // ── Stats ────────────────────────────────────────────────────────────────
 
@@ -165,8 +239,11 @@ export default function JobsPage() {
           j.title.toLowerCase().includes(q)
       );
     }
+    if (minScore > 0) {
+      list = list.filter((j) => j.score != null && j.score >= minScore);
+    }
     return list;
-  }, [jobs, activeFilter, search]);
+  }, [jobs, activeFilter, search, minScore]);
 
   // ── Filter pills ─────────────────────────────────────────────────────────
 
@@ -177,6 +254,14 @@ export default function JobsPage() {
     { key: "responded", label: `Responded (${counts.responded})` },
     { key: "offer",     label: `Offer (${counts.offer})` },
     { key: "rejected",  label: `Rejected (${counts.rejected})` },
+  ];
+
+  const scoreOptions: { value: MinScore; label: string }[] = [
+    { value: 0, label: "Any" },
+    { value: 6, label: "6+" },
+    { value: 7, label: "7+" },
+    { value: 8, label: "8+" },
+    { value: 9, label: "9+" },
   ];
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -246,6 +331,24 @@ export default function JobsPage() {
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${
                 activeFilter === key
                   ? "bg-[#4ade80]/10 text-[#4ade80] border-[#4ade80]/40"
+                  : "bg-[#1e293b] text-[#94a3b8] border-[#334155] hover:text-white hover:border-[#475569]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Score filter */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-[#94a3b8] font-mono">Min Score:</span>
+          {scoreOptions.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setMinScore(value)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors border font-mono ${
+                minScore === value
+                  ? "bg-[#fbbf24]/10 text-[#fbbf24] border-[#fbbf24]/40"
                   : "bg-[#1e293b] text-[#94a3b8] border-[#334155] hover:text-white hover:border-[#475569]"
               }`}
             >
@@ -337,22 +440,38 @@ export default function JobsPage() {
                       </p>
                     </div>
 
-                    {/* Apply button — only for "seen" status */}
-                    {job.status === "seen" && job.url && (
-                      <a
-                        href={job.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/30 hover:bg-[#4ade80]/20 transition-colors"
-                      >
-                        Apply →
-                      </a>
-                    )}
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* Apply link — only for "seen" status */}
+                      {job.status === "seen" && job.url && (
+                        <a
+                          href={job.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/30 hover:bg-[#4ade80]/20 transition-colors"
+                        >
+                          Apply →
+                        </a>
+                      )}
+
+                      {/* Easy Apply button — only for "seen" status */}
+                      {job.status === "seen" && (
+                        <button
+                          onClick={() => {
+                            post("/linkedin/trigger/run-easy-apply", {});
+                            alert("Easy Apply triggered — check Telegram for results");
+                          }}
+                          className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded font-mono transition-colors"
+                        >
+                          ⚡ Auto Apply
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Badges row */}
                   <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                    <StatusBadge status={job.status} />
+                    <StatusButton job={job} onStatusChange={handleStatusChange} />
                     <SourceBadge source={job.source} />
                     {job.score != null && <ScoreBadge score={job.score} />}
                     {job.applied_at && (

@@ -40,3 +40,10 @@ export function post(path: string, body?: unknown): Promise<any> {
     body: body ? JSON.stringify(body) : undefined,
   });
 }
+
+export function patch(path: string, body?: unknown): Promise<any> {
+  return api(path, {
+    method: "PATCH",
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
