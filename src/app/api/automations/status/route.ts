@@ -1,5 +1,7 @@
 import { requireAuth } from "@/lib/auth";
-import { prisma, dbAvailable } from "@/lib/prisma";
+import { db, dbAvailable } from "@/lib/db";
+import { automationCache } from "@/lib/schema";
+import { eq } from "drizzle-orm";
 
 export async function GET() {
   const authError = await requireAuth();
@@ -17,9 +19,8 @@ export async function GET() {
   }
 
   // Try pushed cache from DB (coop bot)
-  const cached = await prisma!.automationCache.findUnique({
-    where: { botKey: "coop" },
-  });
+  const rows = db ? await db.select().from(automationCache).where(eq(automationCache.botKey, "coop")) : [];
+  const cached = rows[0];
 
   if (cached) {
     const data = JSON.parse(cached.data) as Record<string, unknown>;

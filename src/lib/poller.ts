@@ -1,4 +1,6 @@
-import { prisma, dbAvailable } from "./prisma";
+import { db, dbAvailable } from "./db";
+import { botStatusCache } from "./schema";
+import { count, lt, eq } from "drizzle-orm";
 import { BOTS, type BotConfig } from "./config";
 
 const STALE_SECONDS = 60;
@@ -95,7 +97,7 @@ function localBotResult(): BotPollResult {
 }
 
 async function pollAllBots(): Promise<void> {
-  const now = new Date();
+  const now = new Date().toISOString();
 
   for (const bot of BOTS) {
     let pollResult: BotPollResult;
@@ -125,28 +127,27 @@ async function pollAllBots(): Promise<void> {
         ? "local"
         : (STATUS_TO_HEALTH[pollResult.status] ?? "unknown");
 
-    await prisma!.botStatusCache.upsert({
-      where: { botId: bot.id },
-      update: {
+    await db!.insert(botStatusCache).values({
+      botId: bot.id,
+      botName: bot.name,
+      botType: bot.type,
+      status: pollResult.status,
+      health,
+      details: pollResult.details != null ? JSON.stringify(pollResult.details) : null,
+      lastLine: pollResult.lastLine ?? null,
+      lastModified: pollResult.lastModified ? pollResult.lastModified.toISOString() : null,
+      lastPolled: now,
+      errorMsg: pollResult.errorMsg ?? null,
+    }).onConflictDoUpdate({
+      target: botStatusCache.botId,
+      set: {
         botName: bot.name,
         botType: bot.type,
         status: pollResult.status,
         health,
-        details: pollResult.details != null ? JSON.stringify(pollResult.details) : undefined,
+        details: pollResult.details != null ? JSON.stringify(pollResult.details) : null,
         lastLine: pollResult.lastLine ?? null,
-        lastModified: pollResult.lastModified ?? null,
-        lastPolled: now,
-        errorMsg: pollResult.errorMsg ?? null,
-      },
-      create: {
-        botId: bot.id,
-        botName: bot.name,
-        botType: bot.type,
-        status: pollResult.status,
-        health,
-        details: pollResult.details != null ? JSON.stringify(pollResult.details) : undefined,
-        lastLine: pollResult.lastLine ?? null,
-        lastModified: pollResult.lastModified ?? null,
+        lastModified: pollResult.lastModified ? pollResult.lastModified.toISOString() : null,
         lastPolled: now,
         errorMsg: pollResult.errorMsg ?? null,
       },
@@ -158,13 +159,11 @@ async function ensureFreshStatus(): Promise<void> {
   const staleThreshold = new Date(Date.now() - STALE_SECONDS * 1000);
 
   // Check if we have any rows at all, or if any row is stale
-  const staleCount = await prisma!.botStatusCache.count({
-    where: {
-      lastPolled: { lt: staleThreshold },
-    },
-  });
+  const staleResult = await db!.select({ count: count() }).from(botStatusCache).where(lt(botStatusCache.lastPolled, staleThreshold.toISOString()));
+  const staleCount = staleResult[0]?.count ?? 0;
 
-  const totalCount = await prisma!.botStatusCache.count();
+  const totalResult = await db!.select({ count: count() }).from(botStatusCache);
+  const totalCount = totalResult[0]?.count ?? 0;
 
   if (staleCount > 0 || totalCount === 0) {
     await pollAllBots();
@@ -221,9 +220,11 @@ export async function getStatus(): Promise<BotStatusRow[]> {
   }
 
   await ensureFreshStatus();
-  const rows = await prisma!.botStatusCache.findMany();
+  const rows = await db!.select().from(botStatusCache);
   return rows.map((row) => ({
     ...row,
     details: row.details != null ? JSON.parse(row.details) : null,
+    lastModified: row.lastModified ? new Date(row.lastModified) : null,
+    lastPolled: new Date(row.lastPolled),
   }));
 }

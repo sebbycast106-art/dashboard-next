@@ -1,5 +1,8 @@
 import { requireAuth } from "@/lib/auth";
-import { prisma, dbAvailable } from "@/lib/prisma";
+import { db, dbAvailable } from "@/lib/db";
+import { gamesCompletions } from "@/lib/schema";
+import { eq, and } from "drizzle-orm";
+import { GameCompleteSchema } from "@/lib/schemas";
 
 function todayUTC(): string {
   return new Date().toISOString().slice(0, 10);
@@ -30,20 +33,13 @@ export async function POST(request: Request) {
     return Response.json({ error: "Database not configured" }, { status: 503 });
   }
 
-  let body: Record<string, unknown>;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  const rawBody = await request.json().catch(() => ({}));
+  const parsed = GameCompleteSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return Response.json({ error: "invalid_input" }, { status: 400 });
   }
 
-  // Accept both gameId and game_id for compatibility
-  const gameId =
-    typeof body.gameId === "string"
-      ? body.gameId.trim()
-      : typeof body.game_id === "string"
-      ? body.game_id.trim()
-      : "";
+  const gameId = (parsed.data.gameId ?? parsed.data.game_id ?? "").trim();
 
   if (!gameId) {
     return Response.json({ error: "gameId required" }, { status: 400 });
@@ -51,13 +47,12 @@ export async function POST(request: Request) {
 
   const today = todayUTC();
   const yesterday = yesterdayUTC();
-  const todayDate = new Date(today + "T00:00:00.000Z");
-  const yesterdayDate = new Date(yesterday + "T00:00:00.000Z");
 
   // Check if already completed today — idempotent
-  const existing = await prisma!.gamesCompletion.findUnique({
-    where: { gameId_completedDate: { gameId, completedDate: todayDate } },
-  });
+  const existingRows = await db!.select().from(gamesCompletions).where(
+    and(eq(gamesCompletions.gameId, gameId), eq(gamesCompletions.completedDate, today))
+  );
+  const existing = existingRows[0];
 
   if (existing) {
     return Response.json({
@@ -73,31 +68,28 @@ export async function POST(request: Request) {
   }
 
   // Look up yesterday's streak
-  const prev = await prisma!.gamesCompletion.findUnique({
-    where: { gameId_completedDate: { gameId, completedDate: yesterdayDate } },
-  });
+  const prevRows = await db!.select().from(gamesCompletions).where(
+    and(eq(gamesCompletions.gameId, gameId), eq(gamesCompletions.completedDate, yesterday))
+  );
+  const prev = prevRows[0];
 
   const newStreak = prev ? prev.streak + 1 : 1;
   const lastPlayed = nowStr();
 
-  const record = await prisma!.gamesCompletion.upsert({
-    where: { gameId_completedDate: { gameId, completedDate: todayDate } },
-    update: { streak: newStreak, lastPlayed },
-    create: {
-      gameId,
-      completedDate: todayDate,
-      streak: newStreak,
-      lastPlayed,
-    },
-  });
+  await db!.insert(gamesCompletions)
+    .values({ gameId, completedDate: today, streak: newStreak, lastPlayed })
+    .onConflictDoUpdate({
+      target: [gamesCompletions.gameId, gamesCompletions.completedDate],
+      set: { streak: newStreak, lastPlayed }
+    });
 
   return Response.json({
     status: {
       completed: true,
       inProgress: false,
       date: today,
-      streak: record.streak,
-      lastPlayed: record.lastPlayed,
+      streak: newStreak,
+      lastPlayed,
     },
     date: today,
   });

@@ -1,4 +1,5 @@
-import { prisma, dbAvailable } from "@/lib/prisma";
+import { db, dbAvailable } from "@/lib/db";
+import { automationCache } from "@/lib/schema";
 
 export async function POST(request: Request) {
   if (!dbAvailable) {
@@ -23,16 +24,16 @@ export async function POST(request: Request) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const bot = typeof body.bot === "string" ? body.bot : "coop";
+  const botKey = typeof body.bot === "string" ? body.bot : "coop";
   const rawData = (typeof body.data === "object" && body.data !== null ? body.data : {}) as Record<string, unknown>;
   rawData.pushed_at = new Date().toISOString();
-  const data = JSON.stringify(rawData);
 
-  await prisma!.automationCache.upsert({
-    where: { botKey: bot },
-    update: { data, pushedAt: new Date() },
-    create: { botKey: bot, data, pushedAt: new Date() },
-  });
+  await db!.insert(automationCache)
+    .values({ botKey, data: JSON.stringify(rawData), pushedAt: new Date().toISOString() })
+    .onConflictDoUpdate({
+      target: automationCache.botKey,
+      set: { data: JSON.stringify(rawData), pushedAt: new Date().toISOString() }
+    });
 
   return Response.json({ ok: true });
 }

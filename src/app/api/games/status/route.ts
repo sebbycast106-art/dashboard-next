@@ -1,5 +1,7 @@
 import { requireAuth } from "@/lib/auth";
-import { prisma, dbAvailable } from "@/lib/prisma";
+import { db, dbAvailable } from "@/lib/db";
+import { gamesCompletions } from "@/lib/schema";
+import { eq } from "drizzle-orm";
 
 function todayUTC(): string {
   return new Date().toISOString().slice(0, 10);
@@ -14,11 +16,8 @@ export async function GET() {
   }
 
   const today = todayUTC();
-  const todayDate = new Date(today + "T00:00:00.000Z");
 
-  const rows = await prisma!.gamesCompletion.findMany({
-    where: { completedDate: todayDate },
-  });
+  const rows = db ? await db.select().from(gamesCompletions).where(eq(gamesCompletions.completedDate, today)) : [];
 
   const status: Record<string, unknown> = {};
   for (const row of rows) {

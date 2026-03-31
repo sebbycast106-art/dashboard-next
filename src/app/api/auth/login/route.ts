@@ -1,20 +1,13 @@
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { signToken, COOKIE_NAME } from "@/lib/auth";
+import { LoginSchema } from "@/lib/schemas";
 
 export async function POST(request: Request) {
-  let body: Record<string, unknown>;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const password = typeof body.password === "string" ? body.password : "";
-
-  if (!password) {
-    return Response.json({ error: "Password required" }, { status: 400 });
-  }
+  const body = await request.json().catch(() => ({}));
+  const parsed = LoginSchema.safeParse(body);
+  if (!parsed.success) return Response.json({ error: "invalid_input" }, { status: 400 });
+  const { password } = parsed.data;
 
   const hash = process.env.DASHBOARD_PASSWORD_HASH ?? "";
 
