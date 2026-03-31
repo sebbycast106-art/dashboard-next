@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { post } from "@/lib/api";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
   const [password, setPassword] = useState("");
@@ -57,14 +59,14 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="relative">
-              <input
+              <Input
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSubmit(e as any)}
+                onKeyDown={(e) => e.key === "Enter" && handleSubmit(e as unknown as React.FormEvent)}
                 placeholder="Password"
                 autoFocus
-                className="w-full px-4 py-3 pr-11 rounded-xl bg-[#0f172a] border border-[#334155] text-white placeholder-[#475569] focus:outline-none focus:border-[#4ade80]/50 focus:ring-1 focus:ring-[#4ade80]/30 transition-colors text-sm"
+                className="w-full px-4 py-3 pr-11 rounded-xl bg-[#0f172a] border border-[#334155] text-white placeholder-[#475569] focus:outline-none focus:border-[#4ade80]/50 focus:ring-1 focus:ring-[#4ade80]/30 transition-colors text-sm h-auto"
               />
               <button
                 type="button"
@@ -91,10 +93,10 @@ export default function LoginPage() {
               </div>
             )}
 
-            <button
+            <Button
               type="submit"
               disabled={loading || !password}
-              className="w-full py-3 rounded-xl bg-[#4ade80] text-[#0f172a] font-semibold text-sm hover:bg-[#22c55e] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="w-full py-3 rounded-xl bg-[#4ade80] text-[#0f172a] font-semibold text-sm hover:bg-[#22c55e] disabled:opacity-40 disabled:cursor-not-allowed transition-colors h-auto"
             >
               {loading ? (
                 <span className="inline-flex items-center justify-center gap-2">
@@ -107,7 +109,7 @@ export default function LoginPage() {
               ) : (
                 "Sign In"
               )}
-            </button>
+            </Button>
           </form>
         </div>
       </div>

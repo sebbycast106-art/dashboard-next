@@ -2,6 +2,7 @@
 
 import { Component } from "react";
 import { usePolling } from "@/hooks/usePolling";
+import { useStatus, useAnalytics, useCalendar, useAutomations } from "@/hooks/useQueries";
 import BotCard from "@/components/BotCard";
 import StatCard from "@/components/StatCard";
 import FunnelChart from "@/components/FunnelChart";
@@ -81,12 +82,18 @@ function formatFetchTime(isoString?: string) {
 }
 
 export default function DashboardPage() {
-  const { data: status, loading: statusLoading } = usePolling("/status", 30000);
-  const { data: linkedin, loading: linkedinLoading } = usePolling("/linkedin/analytics", 60000);
-  const { data: calendar, loading: calendarLoading } = usePolling("/calendar/today", 600000);
-  const { data: automations, loading: automationsLoading } = usePolling("/automations/status", 60000);
+  const { data: statusData, isLoading: statusLoading } = useStatus();
+  const { data: linkedinData, isLoading: linkedinLoading } = useAnalytics();
+  const { data: calendarData, isLoading: calendarLoading } = useCalendar();
+  const { data: automationsData, isLoading: automationsLoading } = useAutomations();
   const { data: finance, loading: financeLoading } = usePolling("/automations/finance", 120000);
   const { data: news, loading: newsLoading } = usePolling("/news/today", 300000);
+
+  // Cast to any for flexible property access (API response shape is dynamic)
+  const status = statusData as any;
+  const linkedin = linkedinData as any;
+  const calendar = calendarData as any;
+  const automations = automationsData as any;
 
   if (statusLoading || linkedinLoading) return <Layout><ErrorBoundary><PageSkeleton /></ErrorBoundary></Layout>;
 

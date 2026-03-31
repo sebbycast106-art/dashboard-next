@@ -1,5 +1,7 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
+
 interface SafetyData {
   risk_level?: "safe" | "caution" | "danger";
   connections?: { today?: number; today_limit?: number; week?: number; week_limit?: number };
@@ -56,10 +58,12 @@ function QuotaBar({ label, current, limit, period }: QuotaBarProps) {
   );
 }
 
-const RISK_CONFIG = {
-  safe:    { emoji: "🟢", label: "Safe",    color: "#4ade80", bg: "bg-[#4ade80]/10", border: "border-[#4ade80]/20", text: "text-[#4ade80]" },
-  caution: { emoji: "🟡", label: "Caution", color: "#fbbf24", bg: "bg-[#fbbf24]/10", border: "border-[#fbbf24]/20", text: "text-[#fbbf24]" },
-  danger:  { emoji: "🔴", label: "Danger",  color: "#ef4444", bg: "bg-[#ef4444]/10", border: "border-[#ef4444]/20", text: "text-[#ef4444]" },
+type RiskVariant = "success" | "warning" | "destructive";
+
+const RISK_CONFIG: Record<string, { emoji: string; label: string; color: string; badgeVariant: RiskVariant }> = {
+  safe:    { emoji: "🟢", label: "Safe",    color: "#4ade80", badgeVariant: "success" },
+  caution: { emoji: "🟡", label: "Caution", color: "#fbbf24", badgeVariant: "warning" },
+  danger:  { emoji: "🔴", label: "Danger",  color: "#ef4444", badgeVariant: "destructive" },
 };
 
 export default function SafetyMeter({ safety, compact = false }: SafetyMeterProps) {
@@ -96,12 +100,10 @@ export default function SafetyMeter({ safety, compact = false }: SafetyMeterProp
             LinkedIn quota usage
           </p>
         </div>
-        <span
-          className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border ${risk.bg} ${risk.border} ${risk.text}`}
-        >
+        <Badge variant={risk.badgeVariant} className="gap-1.5">
           <span>{risk.emoji}</span>
           <span>{risk.label}</span>
-        </span>
+        </Badge>
       </div>
 
       <div className={`px-4 py-3 ${compact ? "space-y-2" : "space-y-3"}`}>

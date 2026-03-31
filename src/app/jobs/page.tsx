@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { usePolling } from "@/hooks/usePolling";
+import { useJobs } from "@/hooks/useQueries";
 import Layout from "@/components/Layout";
 import { post, patch } from "@/lib/api";
 
@@ -174,7 +174,9 @@ function StatusButton({
 // ── Main Page ──────────────────────────────────────────────────────────────
 
 export default function JobsPage() {
-  const { data, loading, error } = usePolling("/jobs", 120000);
+  const { data: rawData, isLoading: loading, error: queryError } = useJobs();
+  const data = rawData as any;
+  const error = queryError ? (queryError as Error).message : null;
 
   const [activeFilter, setActiveFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
