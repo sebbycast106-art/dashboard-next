@@ -92,6 +92,8 @@ export const LINKEDIN_SERVICES: LinkedInService[] = [
   { id: "run-skill-match", name: "Skill Match Check" },
   { id: "run-games", name: "Play Daily Games" },
   { id: "run-feed-scrape", name: "Scrape Feed Posts" },
+  { id: "run-ghost-detector", name: "Ghost Detector" },
+  { id: "run-daily-brief", name: "Daily Brief" },
   { id: "login-test", name: "Login Test" },
   { id: "linkedin-verify", name: "LinkedIn Verify", needs_input: true, input_key: "code" },
   { id: "linkedin-reset", name: "LinkedIn Reset" },
