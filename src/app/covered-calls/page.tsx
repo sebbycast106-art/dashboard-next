@@ -223,7 +223,12 @@ export default function CoveredCallsPage() {
   const asOf = data?.as_of;
   const updatedAt = data?.generated_at ?? data?.fetched_at;
   const stale = data?.stale ?? false;
-  const premiumToDate = data?.performance?.premium_collected_to_date ?? 0;
+  // Avg real-world assignment probability across the actionable writes — a truthful
+  // summary metric (the bot is analyze-only, so there is no "premium collected").
+  const avgAssignRisk = sellCalls.length
+    ? sellCalls.reduce((s, r) => s + (r.prob_assignment_rw ?? r.prob_assignment_rn ?? 0), 0) /
+      sellCalls.length
+    : null;
 
   // Column count for the SELL_CALL table (used by detail-row colSpan).
   const COLS = 7;
@@ -283,7 +288,11 @@ export default function CoveredCallsPage() {
             />
             <StatTile label="Calls To Write" value={sellCalls.length} color="#60a5fa" />
             <StatTile label="No-Trade" value={noTrades.length} color="#475569" />
-            <StatTile label="Premium To Date" value={fmtMoney0(premiumToDate)} color="#34d399" />
+            <StatTile
+              label="Avg Assign. Risk"
+              value={avgAssignRisk != null ? fmtPct0(avgAssignRisk) : "—"}
+              color="#fbbf24"
+            />
           </div>
         )}
 

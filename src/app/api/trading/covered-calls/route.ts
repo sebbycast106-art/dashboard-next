@@ -44,11 +44,18 @@ export async function GET() {
   const cached = rows[0];
 
   if (cached) {
-    const data = JSON.parse(cached.data) as Record<string, unknown>;
-    return Response.json({
-      ...data,
-      fetched_at: now,
-    });
+    try {
+      const data = JSON.parse(cached.data) as Record<string, unknown>;
+      return Response.json({ ...data, fetched_at: now });
+    } catch {
+      // Corrupt cached blob — degrade to the empty state, never 500 the tab.
+      return Response.json({
+        ...emptyPayload(),
+        stale: true,
+        fetched_at: now,
+        _source: "parse_error",
+      });
+    }
   }
 
   // No push yet (e.g. fresh Railway deploy).
