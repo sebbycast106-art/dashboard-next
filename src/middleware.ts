@@ -1,7 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/logout"];
+// /api/automations/push is a machine-to-machine ingest endpoint authenticated by
+// SCHEDULER_SECRET in its own handler (not the JWT cookie) — it must bypass the
+// cookie-redirect middleware or every bot push 307s to /login and fails.
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/logout", "/api/automations/push"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
